@@ -175,6 +175,40 @@ server.get("/api/users", async (req, res) => {
   return res.send(q.rows);
 });
 
+app.delete("/api/messages/:messageId", async (req, res) => {
+  const messageId = req.params.messageId;
+  const userId = req.user.id;
+
+  try {
+    const result = await pool.query(
+      "SELECT ml.user_id, ml.is_admin FROM message_lobbies ml JOIN messages m ON ml.user_id = m.user_id WHERE m.id = $1",
+      [messageId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).send({ error: "Message not found" });
+    }
+
+    const messageUserId = result.rows[0].user_id;
+    const isAdmin = result.rows[0].is_admin;
+
+    if (userId !== messageUserId && !isAdmin) {
+      return res
+        .status(403)
+        .send({ error: "You are not authorized to delete this message" });
+    }
+
+    await pool.query("DELETE FROM messages WHERE id = $1", [messageId]);
+
+    res.send(`Successfully deleted message with id ${messageId}`);
+  } catch (error) {
+    console.error("Error deleting message:", error);
+    res.status(500).send({ error: "Internal server error" });
+  }
+});
+
+
+
 const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () =>
